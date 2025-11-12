@@ -47,9 +47,16 @@ def initialize_services():
         # Initialize auth manager with device code or client credentials
         if settings.use_device_code_auth:
             logger.info("using_device_code_authentication")
+            
+            # Use Graph Explorer client if custom app not configured
+            client_id = settings.graph_explorer_client_id if settings.use_graph_explorer_client else settings.azure_client_id
+            
+            if settings.use_graph_explorer_client:
+                logger.info("using_microsoft_graph_explorer_client")
+            
             auth_manager = MicrosoftAuthManager(
                 tenant_id=settings.azure_tenant_id,
-                client_id=settings.azure_client_id,
+                client_id=client_id,
                 use_device_code=True
             )
         else:

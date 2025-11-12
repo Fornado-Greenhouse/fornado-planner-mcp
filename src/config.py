@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     azure_client_secret: str = ""
     use_device_code_auth: bool = True  # Use user authentication instead of app-only
     
+    # Microsoft Graph Explorer client ID (public client, works for everyone)
+    # Use this if your custom app isn't configured for device code flow
+    use_graph_explorer_client: bool = False
+    graph_explorer_client_id: str = "de8bc8b5-d9f9-48b1-a8ad-b748da725064"
+    
     mcp_server_name: str = "Microsoft Planner MCP"
     mcp_server_version: str = "1.0.0"
     mcp_server_host: str = "0.0.0.0"
