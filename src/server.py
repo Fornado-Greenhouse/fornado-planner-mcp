@@ -1,7 +1,7 @@
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-from src.config import Settings
+from src.config import Settings as AppSettings
 from src.utils.logger import configure_logging
 from src.auth.microsoft import MicrosoftAuthManager
 from src.graph.client import GraphAPIClient
@@ -11,13 +11,10 @@ import structlog
 
 load_dotenv()
 
-settings = Settings()
+settings = AppSettings()
 logger = configure_logging(settings.log_level, settings.log_format)
 
-mcp = FastMCP(
-    name=settings.mcp_server_name,
-    version=settings.mcp_server_version
-)
+mcp = FastMCP(settings.mcp_server_name)
 
 auth_manager = None
 graph_client = None
@@ -186,9 +183,6 @@ async def get_task_details(task_id: str) -> Dict[str, Any]:
 initialize_services()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        mcp,
-        host=settings.mcp_server_host,
-        port=settings.mcp_server_port
+    mcp.run(
+        transport="stdio"
     )
