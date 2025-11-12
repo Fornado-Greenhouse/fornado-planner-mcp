@@ -22,3 +22,5 @@ python-dotenv
 rich
 structlog
 tenacity
+fastapi
+uvicorn
