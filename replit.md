@@ -14,7 +14,7 @@ MVP implementation with core features:
 - HTTP test server for API testing
 - Comprehensive documentation
 
-**Status:** Authentication working, but requires permission update in Azure (see docs/AZURE_PERMISSIONS_FIX.md)
+**Status:** ✅ Fully functional! Authentication working with device code flow for single-user M365 instances.
 
 ## Project Structure
 ```
@@ -65,6 +65,8 @@ Required in `.env`:
 - `AZURE_TENANT_ID` - Azure AD tenant ID
 - `AZURE_CLIENT_ID` - Application client ID
 - `AZURE_CLIENT_SECRET` - Client secret value
+- `USE_DEVICE_CODE_AUTH` - Set to `true` for interactive user login (recommended)
+- `USE_GRAPH_EXPLORER_CLIENT` - Set to `false` to use your own Azure app (recommended after enabling public client flows)
 
 ## MCP Resources
 - `planner://plans/{plan_id}` - Get plan details
@@ -79,6 +81,11 @@ Required in `.env`:
 - `get_task_details` - Get detailed task information
 
 ## Recent Changes
+- **2025-11-12:** Successfully configured device code authentication for user login
+  - Fixed "invalid_client" error by enabling public client flows in Azure Portal
+  - Implemented delegated user authentication (not app-only)
+  - Added environment variables for authentication mode control
+  - Verified working with user's Planner data (alex@fornado.onmicrosoft.com)
 - Initial MVP implementation (2025-01-12)
 - Core authentication and Graph API client
 - FastMCP server with resources and tools
