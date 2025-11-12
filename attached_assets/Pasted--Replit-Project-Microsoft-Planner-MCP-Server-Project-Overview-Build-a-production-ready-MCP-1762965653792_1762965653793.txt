@@ -1,0 +1,1279 @@
+# Replit Project: Microsoft Planner MCP Server
+
+## 🎯 Project Overview
+
+Build a production-ready MCP (Model Context Protocol) server using FastMCP that integrates Microsoft Planner with CLI tools and GitLab CI/CD pipelines. This server will enable your CSO's direct reports to manage their backlogs and planning boards programmatically.
+
+## 📋 Prerequisites
+
+Before starting, ensure you have:
+- Microsoft Azure account with admin access
+- Microsoft 365 organization with Planner enabled
+- Azure app registration permissions
+- Basic understanding of OAuth 2.0
+- Python 3.11+ experience
+- Familiarity with REST APIs
+
+## 🏗️ Project Structure
+
+```
+planner-mcp-server/
+├── src/
+│   ├── __init__.py
+│   ├── server.py              # Main FastMCP server
+│   ├── config.py              # Configuration management
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── microsoft.py      # Microsoft OAuth implementation
+│   │   └── token_manager.py  # Token lifecycle management
+│   ├── resources/
+│   │   ├── __init__.py
+│   │   ├── plans.py          # Plan resource handlers
+│   │   ├── tasks.py          # Task resource handlers
+│   │   └── buckets.py        # Bucket resource handlers
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── task_tools.py     # Task manipulation tools
+│   │   ├── bulk_tools.py     # Bulk operations
+│   │   ├── query_tools.py    # Advanced querying
+│   │   └── report_tools.py   # Report generation
+│   ├── graph/
+│   │   ├── __init__.py
+│   │   ├── client.py         # Graph API client wrapper
+│   │   ├── models.py         # Data models
+│   │   └── exceptions.py     # Custom exceptions
+│   ├── cache/
+│   │   ├── __init__.py
+│   │   ├── interface.py      # Cache interface
+│   │   ├── memory.py         # In-memory cache
+│   │   └── redis.py          # Redis cache implementation
+│   └── utils/
+│       ├── __init__.py
+│       ├── validators.py     # Input validation
+│       ├── formatters.py     # Data formatters
+│       └── logger.py         # Logging configuration
+├── cli/
+│   ├── __init__.py
+│   ├── mcp_cli.py           # CLI client for testing
+│   └── commands/
+│       ├── resources.py     # Resource commands
+│       └── tools.py         # Tool commands
+├── tests/
+│   ├── unit/
+│   │   ├── test_auth.py
+│   │   ├── test_resources.py
+│   │   └── test_tools.py
+│   ├── integration/
+│   │   ├── test_graph_api.py
+│   │   └── test_mcp_server.py
+│   └── fixtures/
+│       └── mock_data.py
+├── gitlab/
+│   ├── .gitlab-ci.yml       # GitLab CI/CD integration
+│   └── templates/           # CI/CD job templates
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── docs/
+│   ├── API.md
+│   ├── SETUP.md
+│   └── TROUBLESHOOTING.md
+├── scripts/
+│   ├── setup_azure_app.py   # Azure app registration helper
+│   └── test_connection.py   # Connection test script
+├── .env.example
+├── requirements.txt
+├── pyproject.toml
+├── README.md
+└── ARCHITECTURE.md
+```
+
+## 🚀 Implementation Steps
+
+### Step 1: Initial Setup (30 minutes)
+
+#### 1.1 Create Replit Project
+```bash
+# In your Replit shell
+mkdir planner-mcp-server
+cd planner-mcp-server
+
+# Initialize git
+git init
+```
+
+#### 1.2 Install Dependencies
+```python
+# requirements.txt
+fastmcp==0.3.0
+msal==1.24.1
+msgraph-sdk==1.0.0
+httpx==0.25.2
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+redis==5.0.1
+rich==13.7.0
+click==8.1.7
+tenacity==8.2.3
+prometheus-client==0.19.0
+structlog==24.1.0
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+uvicorn==0.25.0
+```
+
+#### 1.3 Environment Configuration
+```bash
+# .env.example
+# Azure App Registration
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-app-client-id
+AZURE_CLIENT_SECRET=your-client-secret
+
+# MCP Server Settings
+MCP_SERVER_NAME="Microsoft Planner MCP"
+MCP_SERVER_VERSION="1.0.0"
+MCP_SERVER_HOST=0.0.0.0
+MCP_SERVER_PORT=8080
+
+# Microsoft Graph API
+GRAPH_API_VERSION=v1.0
+GRAPH_API_TIMEOUT=30
+
+# Cache Configuration
+CACHE_TYPE=memory  # Options: memory, redis
+CACHE_TTL_SECONDS=300
+REDIS_URL=redis://localhost:6379/0
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_PERIOD=60
+
+# Feature Flags
+ENABLE_BULK_OPERATIONS=true
+ENABLE_NATURAL_LANGUAGE=false
+ENABLE_WEBHOOKS=false
+```
+
+### Step 2: Azure App Registration (45 minutes)
+
+#### 2.1 Create Registration Script
+```python
+# scripts/setup_azure_app.py
+#!/usr/bin/env python3
+"""
+Azure App Registration Setup Script
+This script helps you register your application with Azure AD
+"""
+
+import json
+import subprocess
+import sys
+from typing import Dict, Any
+
+def create_app_registration(app_name: str) -> Dict[str, Any]:
+    """
+    Create an Azure AD app registration
+    """
+    print(f"Creating app registration: {app_name}")
+    
+    # Required permissions for Microsoft Graph
+    required_permissions = {
+        "resourceAppId": "00000003-0000-0000-c000-000000000000",  # Microsoft Graph
+        "resourceAccess": [
+            {
+                "id": "8b3c1b15-fb51-4b0b-b6d5-64a560392a8e",  # Tasks.ReadWrite
+                "type": "Scope"
+            },
+            {
+                "id": "89fe9824-0a47-4dfa-92a5-a5597d175a70",  # Tasks.ReadWrite.Shared
+                "type": "Scope"
+            },
+            {
+                "id": "5b567255-7703-4780-807c-7be8301ae99b",  # Group.Read.All
+                "type": "Role"
+            },
+            {
+                "id": "df021288-bdef-4463-88db-98f22de89214",  # User.Read.All
+                "type": "Role"
+            }
+        ]
+    }
+    
+    manifest = {
+        "displayName": app_name,
+        "signInAudience": "AzureADMyOrg",
+        "requiredResourceAccess": [required_permissions]
+    }
+    
+    # Note: This is a simplified example. In production, use Azure CLI or SDK
+    print("""
+    Please manually create the app registration in Azure Portal:
+    1. Go to Azure Portal > Azure Active Directory > App registrations
+    2. Click 'New registration'
+    3. Name: '{}'
+    4. Supported account types: 'Single tenant'
+    5. After creation, go to 'API permissions' and add:
+       - Microsoft Graph > Delegated > Tasks.ReadWrite
+       - Microsoft Graph > Application > Group.Read.All
+       - Microsoft Graph > Application > User.Read.All
+    6. Grant admin consent for your organization
+    7. Create a client secret in 'Certificates & secrets'
+    8. Copy the Application (client) ID and Directory (tenant) ID
+    """.format(app_name))
+    
+    return manifest
+
+if __name__ == "__main__":
+    app_config = create_app_registration("Planner MCP Server")
+    print("\nSave your credentials in .env file")
+```
+
+### Step 3: Core Authentication Module (1 hour)
+
+#### 3.1 Microsoft Authentication
+```python
+# src/auth/microsoft.py
+from msal import ConfidentialClientApplication
+from typing import Optional, Dict, Any
+import os
+import time
+from functools import lru_cache
+import structlog
+
+logger = structlog.get_logger()
+
+class MicrosoftAuthManager:
+    """
+    Manages Microsoft authentication and token lifecycle
+    """
+    
+    def __init__(
+        self,
+        tenant_id: str,
+        client_id: str,
+        client_secret: str,
+        authority: Optional[str] = None
+    ):
+        self.tenant_id = tenant_id
+        self.client_id = client_id
+        self.authority = authority or f"https://login.microsoftonline.com/{tenant_id}"
+        
+        self._app = ConfidentialClientApplication(
+            client_id=client_id,
+            client_credential=client_secret,
+            authority=self.authority
+        )
+        
+        self._token_cache: Dict[str, Any] = {}
+        
+    def get_app_token(self, scopes: Optional[list] = None) -> str:
+        """
+        Get application-level access token
+        """
+        scopes = scopes or ["https://graph.microsoft.com/.default"]
+        cache_key = "|".join(sorted(scopes))
+        
+        # Check cache
+        if cache_key in self._token_cache:
+            cached = self._token_cache[cache_key]
+            # Check if token is still valid (with 5 min buffer)
+            if cached["expires_at"] > time.time() + 300:
+                return cached["access_token"]
+        
+        # Acquire new token
+        result = self._app.acquire_token_for_client(scopes=scopes)
+        
+        if "access_token" in result:
+            # Cache the token
+            self._token_cache[cache_key] = {
+                "access_token": result["access_token"],
+                "expires_at": time.time() + result.get("expires_in", 3600)
+            }
+            logger.info("acquired_new_token", scopes=scopes)
+            return result["access_token"]
+        
+        error_msg = f"Failed to acquire token: {result.get('error_description', 'Unknown error')}"
+        logger.error("token_acquisition_failed", error=result.get("error"))
+        raise Exception(error_msg)
+    
+    def get_delegated_token(self, username: str, scopes: Optional[list] = None) -> str:
+        """
+        Get delegated (user) access token using device code flow
+        """
+        scopes = scopes or ["Tasks.ReadWrite", "User.Read"]
+        
+        flow = self._app.initiate_device_flow(scopes=scopes)
+        
+        if "user_code" not in flow:
+            raise Exception("Failed to create device flow")
+        
+        print(flow["message"])  # Display instructions to user
+        
+        # Poll for the token
+        result = self._app.acquire_token_by_device_flow(flow)
+        
+        if "access_token" in result:
+            return result["access_token"]
+        
+        raise Exception(f"Authentication failed: {result.get('error')}")
+    
+    def validate_token(self, token: str) -> bool:
+        """
+        Validate if a token is still valid
+        """
+        # In production, decode JWT and check expiration
+        # For now, return True
+        return True
+```
+
+### Step 4: Graph API Client (1.5 hours)
+
+#### 4.1 Graph API Client Implementation
+```python
+# src/graph/client.py
+import httpx
+from typing import Dict, List, Any, Optional
+from tenacity import retry, stop_after_attempt, wait_exponential
+import structlog
+from src.graph.models import PlannerTask, PlannerPlan, PlannerBucket
+from src.graph.exceptions import (
+    GraphAPIError, 
+    RateLimitError, 
+    NotFoundError,
+    AuthenticationError
+)
+
+logger = structlog.get_logger()
+
+class GraphAPIClient:
+    """
+    Microsoft Graph API client with retry logic and error handling
+    """
+    
+    BASE_URL = "https://graph.microsoft.com/v1.0"
+    
+    def __init__(self, auth_manager):
+        self.auth = auth_manager
+        self.client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_keepalive_connections=10)
+        )
+        
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """Get request headers with authentication"""
+        token = self.auth.get_app_token()
+        return {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True
+    )
+    async def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs
+    ) -> httpx.Response:
+        """
+        Make HTTP request with retry logic
+        """
+        url = f"{self.BASE_URL}{endpoint}"
+        headers = self._get_headers()
+        
+        logger.debug("making_graph_request", method=method, endpoint=endpoint)
+        
+        try:
+            response = await self.client.request(
+                method=method,
+                url=url,
+                headers=headers,
+                **kwargs
+            )
+            
+            # Handle rate limiting
+            if response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", "60"))
+                raise RateLimitError(f"Rate limited. Retry after {retry_after} seconds")
+            
+            # Handle authentication errors
+            if response.status_code == 401:
+                raise AuthenticationError("Authentication failed")
+            
+            # Handle not found
+            if response.status_code == 404:
+                raise NotFoundError(f"Resource not found: {endpoint}")
+            
+            # Raise for other HTTP errors
+            response.raise_for_status()
+            
+            return response
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("graph_api_error", status=e.response.status_code)
+            raise GraphAPIError(f"Graph API error: {e}")
+        except Exception as e:
+            logger.error("unexpected_error", error=str(e))
+            raise
+    
+    # Plan Operations
+    async def get_plan(self, plan_id: str) -> PlannerPlan:
+        """Get a specific plan"""
+        response = await self._make_request("GET", f"/planner/plans/{plan_id}")
+        return PlannerPlan.from_dict(response.json())
+    
+    async def get_group_plans(self, group_id: str) -> List[PlannerPlan]:
+        """Get all plans for a group"""
+        response = await self._make_request("GET", f"/groups/{group_id}/planner/plans")
+        data = response.json()
+        return [PlannerPlan.from_dict(p) for p in data.get("value", [])]
+    
+    # Task Operations
+    async def get_task(self, task_id: str) -> PlannerTask:
+        """Get a specific task"""
+        response = await self._make_request("GET", f"/planner/tasks/{task_id}")
+        return PlannerTask.from_dict(response.json())
+    
+    async def get_plan_tasks(self, plan_id: str) -> List[PlannerTask]:
+        """Get all tasks for a plan"""
+        # Note: This requires filtering after fetching all tasks
+        # Graph API doesn't support direct plan filtering
+        response = await self._make_request("GET", "/planner/tasks")
+        data = response.json()
+        tasks = [PlannerTask.from_dict(t) for t in data.get("value", [])]
+        return [t for t in tasks if t.plan_id == plan_id]
+    
+    async def create_task(self, task_data: Dict[str, Any]) -> PlannerTask:
+        """Create a new task"""
+        response = await self._make_request(
+            "POST",
+            "/planner/tasks",
+            json=task_data
+        )
+        return PlannerTask.from_dict(response.json())
+    
+    async def update_task(
+        self,
+        task_id: str,
+        updates: Dict[str, Any],
+        etag: str
+    ) -> PlannerTask:
+        """Update an existing task"""
+        headers = {"If-Match": etag}
+        response = await self._make_request(
+            "PATCH",
+            f"/planner/tasks/{task_id}",
+            json=updates,
+            headers=headers
+        )
+        return PlannerTask.from_dict(response.json())
+    
+    async def delete_task(self, task_id: str, etag: str) -> bool:
+        """Delete a task"""
+        headers = {"If-Match": etag}
+        response = await self._make_request(
+            "DELETE",
+            f"/planner/tasks/{task_id}",
+            headers=headers
+        )
+        return response.status_code == 204
+    
+    # Bucket Operations
+    async def get_plan_buckets(self, plan_id: str) -> List[PlannerBucket]:
+        """Get all buckets for a plan"""
+        response = await self._make_request(
+            "GET",
+            f"/planner/plans/{plan_id}/buckets"
+        )
+        data = response.json()
+        return [PlannerBucket.from_dict(b) for b in data.get("value", [])]
+    
+    # Batch Operations
+    async def batch_request(self, requests: List[Dict[str, Any]]) -> List[Dict]:
+        """Execute multiple requests in a single batch"""
+        batch_payload = {"requests": requests}
+        response = await self._make_request(
+            "POST",
+            "/$batch",
+            json=batch_payload
+        )
+        return response.json().get("responses", [])
+```
+
+### Step 5: FastMCP Server Implementation (2 hours)
+
+#### 5.1 Main Server Setup
+```python
+# src/server.py
+from fastmcp import FastMCP, Resource, Tool
+from typing import List, Dict, Any, Optional
+import os
+from dotenv import load_dotenv
+import structlog
+from src.auth.microsoft import MicrosoftAuthManager
+from src.graph.client import GraphAPIClient
+from src.resources import PlanResource, TaskResource, BucketResource
+from src.tools import TaskTools, BulkTools, QueryTools, ReportTools
+from src.cache import CacheManager
+from src.config import Settings
+
+# Load environment
+load_dotenv()
+
+# Configure logging
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
+
+# Initialize settings
+settings = Settings()
+
+# Initialize FastMCP
+mcp = FastMCP(
+    name=settings.mcp_server_name,
+    version=settings.mcp_server_version
+)
+
+# Initialize services
+auth_manager = MicrosoftAuthManager(
+    tenant_id=settings.azure_tenant_id,
+    client_id=settings.azure_client_id,
+    client_secret=settings.azure_client_secret
+)
+
+graph_client = GraphAPIClient(auth_manager)
+cache_manager = CacheManager(settings.cache_type)
+
+# Initialize resource handlers
+plan_resource = PlanResource(graph_client, cache_manager)
+task_resource = TaskResource(graph_client, cache_manager)
+bucket_resource = BucketResource(graph_client, cache_manager)
+
+# Initialize tools
+task_tools = TaskTools(graph_client, cache_manager)
+bulk_tools = BulkTools(graph_client, cache_manager)
+query_tools = QueryTools(graph_client, cache_manager)
+report_tools = ReportTools(graph_client, cache_manager)
+
+# Register Resources
+@mcp.resource("planner://plans")
+async def list_plans() -> List[Resource]:
+    """List all available plans"""
+    return await plan_resource.list_all()
+
+@mcp.resource("planner://plans/{plan_id}")
+async def get_plan(plan_id: str) -> Resource:
+    """Get a specific plan"""
+    return await plan_resource.get(plan_id)
+
+@mcp.resource("planner://plans/{plan_id}/tasks")
+async def list_plan_tasks(plan_id: str) -> List[Resource]:
+    """List all tasks in a plan"""
+    return await task_resource.list_for_plan(plan_id)
+
+@mcp.resource("planner://plans/{plan_id}/tasks/{task_id}")
+async def get_task(plan_id: str, task_id: str) -> Resource:
+    """Get a specific task"""
+    return await task_resource.get(task_id)
+
+@mcp.resource("planner://plans/{plan_id}/buckets")
+async def list_plan_buckets(plan_id: str) -> List[Resource]:
+    """List all buckets in a plan"""
+    return await bucket_resource.list_for_plan(plan_id)
+
+# Register Tools
+@mcp.tool(
+    name="create_task",
+    description="Create a new task in Microsoft Planner"
+)
+async def create_task(
+    plan_id: str,
+    title: str,
+    bucket_id: Optional[str] = None,
+    description: Optional[str] = None,
+    assignee_ids: Optional[List[str]] = None,
+    due_date: Optional[str] = None,
+    priority: Optional[int] = None
+) -> Dict[str, Any]:
+    """Create a new task"""
+    return await task_tools.create_task(
+        plan_id=plan_id,
+        title=title,
+        bucket_id=bucket_id,
+        description=description,
+        assignee_ids=assignee_ids,
+        due_date=due_date,
+        priority=priority
+    )
+
+@mcp.tool(
+    name="update_task",
+    description="Update an existing task"
+)
+async def update_task(
+    task_id: str,
+    **updates
+) -> Dict[str, Any]:
+    """Update a task"""
+    return await task_tools.update_task(task_id, updates)
+
+@mcp.tool(
+    name="move_task",
+    description="Move a task to a different bucket"
+)
+async def move_task(
+    task_id: str,
+    target_bucket_id: str
+) -> Dict[str, Any]:
+    """Move task to another bucket"""
+    return await task_tools.move_task(task_id, target_bucket_id)
+
+@mcp.tool(
+    name="bulk_create_tasks",
+    description="Create multiple tasks at once"
+)
+async def bulk_create_tasks(
+    plan_id: str,
+    tasks: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Bulk create tasks"""
+    return await bulk_tools.create_tasks(plan_id, tasks)
+
+@mcp.tool(
+    name="query_tasks",
+    description="Query tasks with advanced filters"
+)
+async def query_tasks(
+    plan_id: Optional[str] = None,
+    assignee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    due_before: Optional[str] = None,
+    due_after: Optional[str] = None,
+    priority: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Query tasks with filters"""
+    return await query_tools.query_tasks(
+        plan_id=plan_id,
+        assignee_id=assignee_id,
+        status=status,
+        due_before=due_before,
+        due_after=due_after,
+        priority=priority
+    )
+
+@mcp.tool(
+    name="generate_report",
+    description="Generate a report for a plan"
+)
+async def generate_report(
+    plan_id: str,
+    report_type: str = "summary",
+    format: str = "json"
+) -> Dict[str, Any]:
+    """Generate plan report"""
+    return await report_tools.generate_report(
+        plan_id=plan_id,
+        report_type=report_type,
+        format=format
+    )
+
+# Health check endpoint
+@mcp.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    try:
+        # Test Graph API connectivity
+        token = auth_manager.get_app_token()
+        graph_status = "healthy" if token else "unhealthy"
+    except:
+        graph_status = "unhealthy"
+    
+    return {
+        "status": "healthy",
+        "service": settings.mcp_server_name,
+        "version": settings.mcp_server_version,
+        "components": {
+            "graph_api": graph_status,
+            "cache": cache_manager.health_check()
+        }
+    }
+
+# Metrics endpoint
+@mcp.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from prometheus_client import generate_latest
+    return generate_latest()
+
+# Main entry point
+if __name__ == "__main__":
+    import uvicorn
+    
+    logger.info(
+        "starting_mcp_server",
+        host=settings.mcp_server_host,
+        port=settings.mcp_server_port
+    )
+    
+    uvicorn.run(
+        mcp.app,
+        host=settings.mcp_server_host,
+        port=settings.mcp_server_port,
+        log_level=settings.log_level.lower()
+    )
+```
+
+### Step 6: CLI Client (1 hour)
+
+#### 6.1 CLI Implementation
+```python
+# cli/mcp_cli.py
+#!/usr/bin/env python3
+"""
+MCP CLI - Command-line interface for Microsoft Planner MCP Server
+"""
+
+import click
+import httpx
+import json
+from rich.console import Console
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from typing import Optional, List, Dict, Any
+import os
+
+console = Console()
+
+class MCPClient:
+    def __init__(self, server_url: str):
+        self.server_url = server_url
+        self.client = httpx.Client(base_url=server_url, timeout=30.0)
+    
+    def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict:
+        """Call an MCP tool"""
+        response = self.client.post(
+            f"/tools/{tool_name}",
+            json=params
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def get_resource(self, uri: str) -> Dict:
+        """Get an MCP resource"""
+        response = self.client.get(f"/resources/{uri}")
+        response.raise_for_status()
+        return response.json()
+
+@click.group()
+@click.option('--server', default='http://localhost:8080', help='MCP server URL')
+@click.pass_context
+def cli(ctx, server):
+    """Microsoft Planner MCP CLI"""
+    ctx.ensure_object(dict)
+    ctx.obj['client'] = MCPClient(server)
+
+@cli.group()
+def resource():
+    """Resource operations"""
+    pass
+
+@resource.command()
+@click.pass_context
+def list_plans(ctx):
+    """List all available plans"""
+    client = ctx.obj['client']
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+    ) as progress:
+        progress.add_task("Fetching plans...", total=None)
+        plans = client.get_resource("planner://plans")
+    
+    table = Table(title="Available Plans")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="green")
+    table.add_column("Tasks", style="yellow")
+    table.add_column("Completion", style="blue")
+    
+    for plan in plans:
+        table.add_row(
+            plan["id"],
+            plan["name"],
+            str(plan["metadata"].get("task_count", 0)),
+            f"{plan['metadata'].get('completion_percentage', 0):.1f}%"
+        )
+    
+    console.print(table)
+
+@resource.command()
+@click.argument('plan_id')
+@click.pass_context
+def list_tasks(ctx, plan_id):
+    """List tasks in a plan"""
+    client = ctx.obj['client']
+    
+    tasks = client.get_resource(f"planner://plans/{plan_id}/tasks")
+    
+    table = Table(title=f"Tasks in Plan {plan_id}")
+    table.add_column("ID", style="cyan", no_wrap=True)
+    table.add_column("Title", style="green")
+    table.add_column("Assignees", style="yellow")
+    table.add_column("Due Date", style="red")
+    table.add_column("Status", style="blue")
+    
+    for task in tasks:
+        assignees = ", ".join(task["metadata"].get("assignee_ids", []))
+        due_date = task["metadata"].get("due_date", "N/A")
+        completion = task["metadata"].get("percent_complete", 0)
+        status = "✓ Done" if completion == 100 else f"{completion}%"
+        
+        table.add_row(
+            task["id"][:8],
+            task["name"],
+            assignees or "Unassigned",
+            due_date,
+            status
+        )
+    
+    console.print(table)
+
+@cli.group()
+def tool():
+    """Tool operations"""
+    pass
+
+@tool.command()
+@click.option('--plan-id', required=True, help='Plan ID')
+@click.option('--title', required=True, help='Task title')
+@click.option('--bucket-id', help='Bucket ID')
+@click.option('--assignee', multiple=True, help='Assignee IDs')
+@click.option('--due-date', help='Due date (ISO format)')
+@click.option('--description', help='Task description')
+@click.pass_context
+def create_task(ctx, plan_id, title, bucket_id, assignee, due_date, description):
+    """Create a new task"""
+    client = ctx.obj['client']
+    
+    params = {
+        "plan_id": plan_id,
+        "title": title
+    }
+    
+    if bucket_id:
+        params["bucket_id"] = bucket_id
+    if assignee:
+        params["assignee_ids"] = list(assignee)
+    if due_date:
+        params["due_date"] = due_date
+    if description:
+        params["description"] = description
+    
+    with console.status("Creating task..."):
+        result = client.call_tool("create_task", params)
+    
+    console.print(f"[green]✓[/green] Task created successfully!")
+    console.print(f"Task ID: [cyan]{result['task_id']}[/cyan]")
+    console.print(f"URI: [blue]{result['uri']}[/blue]")
+
+@tool.command()
+@click.option('--plan-id', help='Filter by plan')
+@click.option('--assignee', help='Filter by assignee')
+@click.option('--status', help='Filter by status')
+@click.option('--due-before', help='Filter by due date')
+@click.pass_context
+def query_tasks(ctx, plan_id, assignee, status, due_before):
+    """Query tasks with filters"""
+    client = ctx.obj['client']
+    
+    params = {}
+    if plan_id:
+        params["plan_id"] = plan_id
+    if assignee:
+        params["assignee_id"] = assignee
+    if status:
+        params["status"] = status
+    if due_before:
+        params["due_before"] = due_before
+    
+    with console.status("Querying tasks..."):
+        results = client.call_tool("query_tasks", params)
+    
+    console.print(f"Found [cyan]{len(results)}[/cyan] tasks")
+    
+    for task in results[:10]:  # Show first 10
+        console.print(f"• {task['title']} ({task['id'][:8]})")
+
+if __name__ == "__main__":
+    cli()
+```
+
+### Step 7: GitLab CI/CD Integration (30 minutes)
+
+#### 7.1 GitLab CI Configuration
+```yaml
+# gitlab/.gitlab-ci.yml
+stages:
+  - setup
+  - plan
+  - execute
+  - report
+
+variables:
+  MCP_SERVER_URL: ${CI_MCP_SERVER_URL}
+  PLAN_ID: ${CI_PLANNER_PLAN_ID}
+
+# Template for MCP operations
+.mcp_template:
+  image: python:3.11-slim
+  before_script:
+    - pip install httpx click rich
+    - export MCP_CLI="python -m cli.mcp_cli --server ${MCP_SERVER_URL}"
+
+# Create task for new deployment
+create_deployment_task:
+  extends: .mcp_template
+  stage: plan
+  script:
+    - |
+      ${MCP_CLI} tool create_task \
+        --plan-id ${PLAN_ID} \
+        --title "Deploy ${CI_PROJECT_NAME} - ${CI_COMMIT_TAG}" \
+        --description "Deployment for commit ${CI_COMMIT_SHA}" \
+        --assignee ${GITLAB_USER_ID}
+  only:
+    - tags
+
+# Update task on successful deployment
+update_deployment_status:
+  extends: .mcp_template
+  stage: report
+  script:
+    - |
+      TASK_ID=$(${MCP_CLI} tool query_tasks \
+        --plan-id ${PLAN_ID} \
+        --title "Deploy ${CI_PROJECT_NAME} - ${CI_COMMIT_TAG}" \
+        | jq -r '.[0].id')
+      
+      ${MCP_CLI} tool update_task \
+        --task-id ${TASK_ID} \
+        --percent-complete 100
+  when: on_success
+  only:
+    - tags
+
+# Generate weekly report
+weekly_report:
+  extends: .mcp_template
+  stage: report
+  script:
+    - |
+      ${MCP_CLI} tool generate_report \
+        --plan-id ${PLAN_ID} \
+        --report-type weekly \
+        --format pdf \
+        > weekly_report.pdf
+  artifacts:
+    paths:
+      - weekly_report.pdf
+    expire_in: 1 month
+  only:
+    - schedules
+```
+
+### Step 8: Testing (1 hour)
+
+#### 8.1 Unit Tests
+```python
+# tests/unit/test_auth.py
+import pytest
+from unittest.mock import Mock, patch
+from src.auth.microsoft import MicrosoftAuthManager
+
+class TestMicrosoftAuthManager:
+    @pytest.fixture
+    def auth_manager(self):
+        return MicrosoftAuthManager(
+            tenant_id="test_tenant",
+            client_id="test_client",
+            client_secret="test_secret"
+        )
+    
+    def test_get_app_token_success(self, auth_manager):
+        with patch.object(auth_manager._app, 'acquire_token_for_client') as mock:
+            mock.return_value = {
+                "access_token": "test_token",
+                "expires_in": 3600
+            }
+            
+            token = auth_manager.get_app_token()
+            assert token == "test_token"
+    
+    def test_get_app_token_cached(self, auth_manager):
+        # First call
+        with patch.object(auth_manager._app, 'acquire_token_for_client') as mock:
+            mock.return_value = {
+                "access_token": "test_token",
+                "expires_in": 3600
+            }
+            token1 = auth_manager.get_app_token()
+        
+        # Second call should use cache
+        with patch.object(auth_manager._app, 'acquire_token_for_client') as mock:
+            token2 = auth_manager.get_app_token()
+            mock.assert_not_called()
+        
+        assert token1 == token2
+```
+
+#### 8.2 Integration Tests
+```python
+# tests/integration/test_mcp_server.py
+import pytest
+import httpx
+from fastapi.testclient import TestClient
+from src.server import mcp
+
+@pytest.fixture
+def client():
+    return TestClient(mcp.app)
+
+class TestMCPServer:
+    def test_health_check(self, client):
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+    
+    def test_list_plans_resource(self, client):
+        response = client.get("/resources/planner://plans")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+    
+    @pytest.mark.asyncio
+    async def test_create_task_tool(self, client):
+        payload = {
+            "plan_id": "test_plan",
+            "title": "Test Task",
+            "description": "Test Description"
+        }
+        
+        response = client.post("/tools/create_task", json=payload)
+        assert response.status_code == 200
+        result = response.json()
+        assert "task_id" in result
+        assert "uri" in result
+```
+
+### Step 9: Docker Deployment (30 minutes)
+
+#### 9.1 Dockerfile
+```dockerfile
+# docker/Dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 mcp && \
+    mkdir -p /app && \
+    chown -R mcp:mcp /app
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY --chown=mcp:mcp src ./src
+COPY --chown=mcp:mcp cli ./cli
+
+# Switch to non-root user
+USER mcp
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"
+
+# Expose port
+EXPOSE 8080
+
+# Run the server
+CMD ["python", "-m", "src.server"]
+```
+
+#### 9.2 Docker Compose
+```yaml
+# docker/docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - CACHE_TYPE=redis
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - mcp-network
+  
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - mcp-network
+  
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - mcp-network
+  
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+```
+
+## 📊 Success Metrics
+
+Your MCP server should achieve:
+- **Response Time**: <200ms for cached requests, <1s for Graph API calls
+- **Availability**: 99.9% uptime
+- **Throughput**: Handle 100+ concurrent connections
+- **Cache Hit Rate**: >80% for read operations
+- **Error Rate**: <1% for valid requests
+
+## 🔧 Troubleshooting Guide
+
+### Common Issues
+
+1. **Authentication Failures**
+   - Verify Azure app registration has correct permissions
+   - Check if admin consent is granted
+   - Ensure client secret hasn't expired
+
+2. **Rate Limiting**
+   - Implement exponential backoff
+   - Use batch requests where possible
+   - Consider caching strategy
+
+3. **Connection Issues**
+   - Check network connectivity to Graph API
+   - Verify firewall rules
+   - Test with Graph Explorer first
+
+## 🎯 Next Steps
+
+1. **Enhance Security**
+   - Implement API key authentication
+   - Add request signing
+   - Enable audit logging
+
+2. **Add Features**
+   - Natural language processing
+   - Webhook support
+   - Custom field mappings
+   - Advanced reporting
+
+3. **Scale Up**
+   - Deploy to Kubernetes
+   - Add horizontal scaling
+   - Implement distributed caching
+
+## 📚 Additional Resources
+
+- [Microsoft Graph API Documentation](https://docs.microsoft.com/en-us/graph/)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [MCP Protocol Specification](https://modelcontextprotocol.io/)
+- [Azure AD Authentication](https://docs.microsoft.com/en-us/azure/active-directory/)
+
+## 🤝 Support
+
+For questions or issues:
+- Check the troubleshooting guide
+- Review the architecture document
+- Consult Microsoft Graph API docs
+- Engage with the MCP community
+
+---
+
+**Happy coding!** 🚀 Build something amazing with your Microsoft Planner MCP Server!
