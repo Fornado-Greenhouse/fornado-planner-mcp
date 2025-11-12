@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["libxcrypt"]
+packages = ["libxcrypt", "vim-full"]
 
 [workflows]
 runButton = "Project"
@@ -32,7 +32,3 @@ outputType = "console"
 [[ports]]
 localPort = 8080
 externalPort = 8080
-
-[[ports]]
-localPort = 38515
-externalPort = 80
