@@ -30,7 +30,7 @@ class GraphAPIClient:
         await self.client.aclose()
     
     def _get_headers(self) -> Dict[str, str]:
-        token = self.auth.get_app_token()
+        token = self.auth.get_token()
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",

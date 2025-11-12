@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     azure_tenant_id: str = ""
     azure_client_id: str = ""
     azure_client_secret: str = ""
+    use_device_code_auth: bool = True  # Use user authentication instead of app-only
     
     mcp_server_name: str = "Microsoft Planner MCP"
     mcp_server_version: str = "1.0.0"

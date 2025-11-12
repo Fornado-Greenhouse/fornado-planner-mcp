@@ -46,6 +46,11 @@ htmlcov/
 *.log
 logs/
 
+# Auth tokens
+.token_cache.json
+token_cache.json
+*.token
+
 # OS
 .DS_Store
 Thumbs.db

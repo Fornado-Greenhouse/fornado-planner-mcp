@@ -39,16 +39,29 @@ def initialize_services():
     """Initialize all services"""
     global auth_manager, graph_client, cache_manager, task_tools, services_initialized
     
-    if not settings.azure_tenant_id or not settings.azure_client_id or not settings.azure_client_secret:
+    if not settings.azure_tenant_id or not settings.azure_client_id:
         logger.warning("Azure credentials not configured")
         return False
     
     try:
-        auth_manager = MicrosoftAuthManager(
-            tenant_id=settings.azure_tenant_id,
-            client_id=settings.azure_client_id,
-            client_secret=settings.azure_client_secret
-        )
+        # Initialize auth manager with device code or client credentials
+        if settings.use_device_code_auth:
+            logger.info("using_device_code_authentication")
+            auth_manager = MicrosoftAuthManager(
+                tenant_id=settings.azure_tenant_id,
+                client_id=settings.azure_client_id,
+                use_device_code=True
+            )
+        else:
+            if not settings.azure_client_secret:
+                logger.error("client_secret_required_for_app_auth")
+                return False
+            logger.info("using_client_credentials_authentication")
+            auth_manager = MicrosoftAuthManager(
+                tenant_id=settings.azure_tenant_id,
+                client_id=settings.azure_client_id,
+                client_secret=settings.azure_client_secret
+            )
         
         graph_client = GraphAPIClient(auth_manager)
         cache_manager = MemoryCache(settings.cache_ttl_seconds)
