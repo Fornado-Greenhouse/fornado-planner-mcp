@@ -1,0 +1,27 @@
+{
+  "displayName": "Planner MCP Server",
+  "signInAudience": "AzureADMyOrg",
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "00000003-0000-0000-c000-000000000000",
+      "resourceAccess": [
+        {
+          "id": "8b3c1b15-fb51-4b0b-b6d5-64a560392a8e",
+          "type": "Scope"
+        },
+        {
+          "id": "89fe9824-0a47-4dfa-92a5-a5597d175a70",
+          "type": "Scope"
+        },
+        {
+          "id": "5b567255-7703-4780-807c-7be8301ae99b",
+          "type": "Role"
+        },
+        {
+          "id": "df021288-bdef-4463-88db-98f22de89214",
+          "type": "Role"
+        }
+      ]
+    }
+  ]
+}
