@@ -11,7 +11,10 @@ MVP implementation with core features:
 - MCP tools for task CRUD operations
 - In-memory caching layer
 - CLI client for testing
+- HTTP test server for API testing
 - Comprehensive documentation
+
+**Status:** Authentication working, but requires permission update in Azure (see docs/AZURE_PERMISSIONS_FIX.md)
 
 ## Project Structure
 ```
@@ -81,6 +84,10 @@ Required in `.env`:
 - FastMCP server with resources and tools
 - In-memory caching layer
 - CLI client for testing
+- HTTP test server added for API testing
+- Fixed client lifecycle issues in HTTP server
+- Added group and plan discovery endpoints
+- Created Azure permissions fix guide
 - Documentation and setup scripts
 
 ## Dependencies

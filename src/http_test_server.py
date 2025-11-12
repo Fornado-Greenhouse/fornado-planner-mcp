@@ -3,7 +3,7 @@ HTTP Test Server for Microsoft Planner MCP
 This provides an HTTP interface for testing the MCP server functionality
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 import uvicorn
 from typing import Dict, Any, Optional, List
@@ -78,6 +78,53 @@ async def health_check():
     }
 
 
+@app.get("/planner/groups")
+async def list_groups():
+    """List all groups the app has access to"""
+    if not services_initialized:
+        raise HTTPException(status_code=503, detail="Services not initialized. Check Azure credentials.")
+    
+    try:
+        response = await graph_client._make_request(
+            "GET",
+            "/groups?$select=id,displayName,description&$filter=groupTypes/any(c:c eq 'Unified')"
+        )
+        
+        data = response.json()
+        groups = data.get("value", [])
+        return {
+            "count": len(groups),
+            "groups": groups
+        }
+    except Exception as e:
+        logger.error(f"Error listing groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/planner/groups/{group_id}/plans")
+async def list_group_plans(group_id: str):
+    """List all plans for a specific group"""
+    if not services_initialized:
+        raise HTTPException(status_code=503, detail="Services not initialized. Check Azure credentials.")
+    
+    try:
+        response = await graph_client._make_request(
+            "GET",
+            f"/groups/{group_id}/planner/plans"
+        )
+        
+        data = response.json()
+        plans = data.get("value", [])
+        return {
+            "group_id": group_id,
+            "count": len(plans),
+            "plans": plans
+        }
+    except Exception as e:
+        logger.error(f"Error listing group plans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/planner/plans/{plan_id}")
 async def get_plan(plan_id: str):
     """Get plan details"""
@@ -91,11 +138,10 @@ async def get_plan(plan_id: str):
         if cached:
             return cached
         
-        async with graph_client:
-            plan = await graph_client.get_plan(plan_id)
-            result = plan.to_dict()
-            await cache_manager.set(cache_key, result)
-            return result
+        plan = await graph_client.get_plan(plan_id)
+        result = plan.to_dict()
+        await cache_manager.set(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"Error getting plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -114,11 +160,10 @@ async def list_plan_tasks(plan_id: str):
         if cached:
             return cached
         
-        async with graph_client:
-            tasks = await graph_client.get_plan_tasks(plan_id)
-            result = [task.to_dict() for task in tasks]
-            await cache_manager.set(cache_key, result)
-            return result
+        tasks = await graph_client.get_plan_tasks(plan_id)
+        result = [task.to_dict() for task in tasks]
+        await cache_manager.set(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"Error listing tasks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -137,11 +182,10 @@ async def list_plan_buckets(plan_id: str):
         if cached:
             return cached
         
-        async with graph_client:
-            buckets = await graph_client.get_plan_buckets(plan_id)
-            result = [bucket.to_dict() for bucket in buckets]
-            await cache_manager.set(cache_key, result)
-            return result
+        buckets = await graph_client.get_plan_buckets(plan_id)
+        result = [bucket.to_dict() for bucket in buckets]
+        await cache_manager.set(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"Error listing buckets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -161,8 +205,7 @@ async def create_task(
         raise HTTPException(status_code=503, detail="Services not initialized. Check Azure credentials.")
     
     try:
-        async with graph_client:
-            return await task_tools.create_task(
+        return await task_tools.create_task(
                 plan_id=plan_id,
                 title=title,
                 bucket_id=bucket_id,
@@ -201,8 +244,7 @@ async def update_task(
         if due_date:
             updates["dueDateTime"] = due_date
         
-        async with graph_client:
-            return await task_tools.update_task(task_id, updates)
+        return await task_tools.update_task(task_id, updates)
     except Exception as e:
         logger.error(f"Error updating task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -215,8 +257,7 @@ async def delete_task(task_id: str):
         raise HTTPException(status_code=503, detail="Services not initialized. Check Azure credentials.")
     
     try:
-        async with graph_client:
-            return await task_tools.delete_task(task_id)
+        return await task_tools.delete_task(task_id)
     except Exception as e:
         logger.error(f"Error deleting task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
